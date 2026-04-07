@@ -10,7 +10,6 @@ import numpy as np
 import rasterio
 from pydantic import BaseModel, Field
 from rasterio.features import rasterize
-from rasterio.transform import array_bounds
 from rasterio.warp import transform_bounds, transform_geom
 from rasterio.windows import Window
 from scipy.ndimage import gaussian_filter

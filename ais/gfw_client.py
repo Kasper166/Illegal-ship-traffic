@@ -41,11 +41,13 @@ class GFWClient:
         self.api_key = api_key or os.getenv("GLOBAL_FISHING_WATCH_API_KEY")
         if not self.api_key:
             raise ValueError("GLOBAL_FISHING_WATCH_API_KEY is required.")
-        self.base_url = (
+        resolved_base_url = (
             base_url
-            or os.getenv("GLOBAL_FISHING_WATCH_API_URL", "https://gateway.api.globalfishingwatch.org")
-        ).rstrip("/")
-        self.redis_url = redis_url or os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            or os.getenv("GLOBAL_FISHING_WATCH_API_URL")
+            or "https://gateway.api.globalfishingwatch.org"
+        )
+        self.base_url = resolved_base_url.rstrip("/")
+        self.redis_url = redis_url or os.getenv("REDIS_URL") or "redis://localhost:6379/0"
         self.timeout_s = timeout_s
         self.max_retries = max_retries
 
