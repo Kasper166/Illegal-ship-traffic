@@ -1,0 +1,211 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Typecheck (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            **/requirements.txt
+
+      - name: Install lint/type dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+          pip install -r detection/requirements.txt
+          pip install -r ais/requirements.txt
+          pip install -r active_learning/requirements.txt
+          pip install -r ingestion/requirements.txt
+          pip install -r dashboard/backend/requirements.txt
+
+      - name: Run ruff
+        run: ruff check .
+
+      - name: Run mypy
+        run: mypy active_learning ais dashboard/backend detection ingestion shared tests
+
+  tests-fast:
+    name: Tests (no slow) (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            **/requirements.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r detection/requirements.txt
+          pip install -r ais/requirements.txt
+          pip install -r active_learning/requirements.txt
+          pip install -r ingestion/requirements.txt
+          pip install -r dashboard/backend/requirements.txt
+
+      - name: Run pytest (excluding slow)
+        run: pytest tests/ -m "not slow"
+
+  docker-build:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    strategy:
+      fail-fast: true
+      matrix:
+        image:
+          - { name: ingestion, dockerfile: ingestion/Dockerfile, context: . }
+          - { name: detection, dockerfile: detection/Dockerfile, context: . }
+          - { name: ais, dockerfile: ais/Dockerfile, context: . }
+          - { name: active-learning, dockerfile: active_learning/Dockerfile, context: . }
+          - { name: dashboard-backend, dockerfile: dashboard/backend/Dockerfile, context: . }
+          - { name: dashboard-frontend, dockerfile: dashboard/frontend/Dockerfile, context: . }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.image.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          push: false
+          tags: darkwater/${{ matrix.image.name }}:ci
+
+  release-main:
+    name: Main Slow Tests + GHCR Push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [tests-fast, docker-build]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            **/requirements.txt
+
+      - name: Install full test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          pip install -r detection/requirements.txt
+          pip install -r ais/requirements.txt
+          pip install -r active_learning/requirements.txt
+          pip install -r ingestion/requirements.txt
+          pip install -r dashboard/backend/requirements.txt
+
+      - name: Run full slow suite
+        run: pytest tests/ -m "slow"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ingestion image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ingestion/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/darkwater-ingestion:latest
+            ghcr.io/${{ github.repository_owner }}/darkwater-ingestion:${{ github.sha }}
+
+      - name: Build and push detection image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: detection/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/darkwater-detection:latest
+            ghcr.io/${{ github.repository_owner }}/darkwater-detection:${{ github.sha }}
+
+      - name: Build and push ais image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ais/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/darkwater-ais:latest
+            ghcr.io/${{ github.repository_owner }}/darkwater-ais:${{ github.sha }}
+
+      - name: Build and push active-learning image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: active_learning/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/darkwater-active-learning:latest
+            ghcr.io/${{ github.repository_owner }}/darkwater-active-learning:${{ github.sha }}
+
+      - name: Build and push dashboard-backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dashboard/backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/darkwater-dashboard-backend:latest
+            ghcr.io/${{ github.repository_owner }}/darkwater-dashboard-backend:${{ github.sha }}
+
+      - name: Build and push dashboard-frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dashboard/frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/darkwater-dashboard-frontend:latest
+            ghcr.io/${{ github.repository_owner }}/darkwater-dashboard-frontend:${{ github.sha }}

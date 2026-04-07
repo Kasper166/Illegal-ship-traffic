@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DARKWATER Maritime Intelligence Dashboard</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    :root {
+      --bg: #060b14;
+      --panel: rgba(11, 18, 32, 0.9);
+      --panel-border: rgba(162, 180, 216, 0.25);
+      --text: #e5efff;
+      --muted: #9eb0d8;
+      --legal: #35dd9b;
+      --dark: #ff4d5a;
+      --review: #f6d059;
+      --accent: #65a8ff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: Inter, "Segoe UI", Arial, sans-serif; }
+    #map { width: 100vw; height: 100vh; }
+
+    .glass {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+      border-radius: 12px;
+    }
+
+    .brand {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 1200;
+      padding: 10px 14px;
+      min-width: 320px;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #f3f7ff;
+    }
+    .brand p {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .filters {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 1200;
+      width: 350px;
+      padding: 14px;
+    }
+    .filters h2 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #f3f7ff;
+      letter-spacing: 0.02em;
+    }
+    .field { margin-bottom: 10px; }
+    .field label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .field input[type="date"],
+    .field input[type="range"],
+    .field button {
+      width: 100%;
+    }
+    .field input[type="date"],
+    .field button {
+      background: rgba(7, 13, 24, 0.95);
+      border: 1px solid rgba(146, 168, 210, 0.4);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 9px;
+    }
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .btn {
+      border: 1px solid rgba(146, 168, 210, 0.4);
+      background: rgba(18, 30, 50, 0.95);
+      color: var(--text);
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn:hover { border-color: var(--accent); }
+    .btn.primary {
+      background: linear-gradient(135deg, #2d5eff, #4e8bff);
+      border-color: #4e8bff;
+      color: #fff;
+    }
+
+    .stats {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      z-index: 1200;
+      padding: 11px 14px;
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      overflow-x: auto;
+    }
+    .metric {
+      min-width: 200px;
+      border-right: 1px solid rgba(162, 180, 216, 0.25);
+      padding-right: 14px;
+    }
+    .metric:last-child { border-right: none; }
+    .metric .k {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 2px;
+    }
+    .metric .v {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f7fbff;
+      line-height: 1.2;
+    }
+
+    .legend {
+      position: absolute;
+      left: 14px;
+      top: 82px;
+      z-index: 1200;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .legend div { display: flex; align-items: center; margin-bottom: 5px; }
+    .legend span {
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      display: inline-block;
+      margin-right: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .dot-legal { background: var(--legal); }
+    .dot-dark { background: var(--dark); }
+    .dot-review { background: var(--review); }
+    .leaflet-popup-content-wrapper,
+    .leaflet-popup-tip {
+      background: #0b1220;
+      color: #d6e4ff;
+      border: 1px solid rgba(161, 180, 220, 0.28);
+    }
+    .popup-grid { font-size: 12px; line-height: 1.45; }
+    .popup-grid b { color: #f5f9ff; }
+    .error-banner {
+      position: absolute;
+      right: 14px;
+      bottom: 82px;
+      z-index: 1201;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #ffd9de;
+      border: 1px solid rgba(255, 80, 97, 0.5);
+      background: rgba(60, 10, 17, 0.9);
+      display: none;
+      max-width: 380px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="brand glass">
+    <h1>DARKWATER Command Dashboard</h1>
+    <p>Gulf of Guinea Maritime Domain Awareness</p>
+  </div>
+
+  <div class="legend glass">
+    <div><span class="dot-legal"></span>Confirmed legal vessel</div>
+    <div><span class="dot-dark"></span>Dark vessel flagged</div>
+    <div><span class="dot-review"></span>Low confidence / under review</div>
+  </div>
+
+  <div class="filters glass">
+    <h2>Operational Filters</h2>
+    <div class="field">
+      <label for="darkOnly">
+        <span>Dark vessels only</span>
+      </label>
+      <div class="toggle-wrap">
+        <input id="darkOnly" type="checkbox" />
+        <span>Enable strict dark-vessel view</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="confidenceRange">
+        <span>Minimum confidence</span>
+        <span id="confidenceValue">0.30</span>
+      </label>
+      <input id="confidenceRange" type="range" min="0" max="1" step="0.01" value="0.30" />
+    </div>
+    <div class="field">
+      <label for="startDate"><span>From date</span></label>
+      <input id="startDate" type="date" />
+    </div>
+    <div class="field">
+      <label for="endDate"><span>To date</span></label>
+      <input id="endDate" type="date" />
+    </div>
+    <div class="actions">
+      <button id="applyFilters" class="btn">Apply Filters</button>
+      <button id="exportGeoJson" class="btn primary">Export GeoJSON</button>
+    </div>
+  </div>
+
+  <div class="stats glass">
+    <div class="metric">
+      <div class="k">Detections Today</div>
+      <div class="v" id="statToday">-</div>
+    </div>
+    <div class="metric">
+      <div class="k">Dark Vessel Count</div>
+      <div class="v" id="statDark">-</div>
+    </div>
+    <div class="metric">
+      <div class="k">Active Learning Iteration</div>
+      <div class="v" id="statIteration">-</div>
+    </div>
+    <div class="metric">
+      <div class="k">Current Model mAP</div>
+      <div class="v" id="statMap">-</div>
+    </div>
+    <div class="metric">
+      <div class="k">Live Feed</div>
+      <div class="v" id="statLive">Connecting...</div>
+    </div>
+  </div>
+
+  <div id="errorBanner" class="error-banner"></div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script>
+    const API_BASE = window.location.protocol.startsWith("http")
+      ? window.location.origin.replace(/\/$/, "")
+      : "http://localhost:8000";
+    const WS_BASE = API_BASE.replace(/^http/, "ws");
+    const POLL_MS = 60000;
+
+    const map = L.map("map", {
+      zoomControl: true,
+      minZoom: 3,
+      worldCopyJump: true
+    }).setView([2.5, 3.5], 6);
+
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; CARTO',
+      subdomains: "abcd",
+      maxZoom: 19
+    }).addTo(map);
+
+    const markersLayer = L.layerGroup().addTo(map);
+    const markerById = new Map();
+    let allDetections = [];
+    let ws = null;
+    let wsRetryMs = 3000;
+
+    const ui = {
+      darkOnly: document.getElementById("darkOnly"),
+      confidenceRange: document.getElementById("confidenceRange"),
+      confidenceValue: document.getElementById("confidenceValue"),
+      startDate: document.getElementById("startDate"),
+      endDate: document.getElementById("endDate"),
+      applyFilters: document.getElementById("applyFilters"),
+      exportGeoJson: document.getElementById("exportGeoJson"),
+      statToday: document.getElementById("statToday"),
+      statDark: document.getElementById("statDark"),
+      statIteration: document.getElementById("statIteration"),
+      statMap: document.getElementById("statMap"),
+      statLive: document.getElementById("statLive"),
+      errorBanner: document.getElementById("errorBanner")
+    };
+
+    function showError(message) {
+      ui.errorBanner.textContent = message;
+      ui.errorBanner.style.display = "block";
+      clearTimeout(showError._timer);
+      showError._timer = setTimeout(() => {
+        ui.errorBanner.style.display = "none";
+      }, 6000);
+    }
+
+    function statusFromDetection(d) {
+      if (d.is_dark) return "No AIS match (dark vessel flagged)";
+      if (d.flagged_for_review || d.confidence < 0.55) return "AIS uncertain / pending review";
+      return "AIS correlated / legal";
+    }
+
+    function markerColor(d) {
+      if (d.is_dark) return "#ff4d5a";
+      if (d.flagged_for_review || d.confidence < 0.55) return "#f6d059";
+      return "#35dd9b";
+    }
+
+    function getLatLon(d) {
+      if (Array.isArray(d.lat_lon_center) && d.lat_lon_center.length === 2) {
+        return [Number(d.lat_lon_center[0]), Number(d.lat_lon_center[1])];
+      }
+      if (typeof d.lat === "number" && typeof d.lon === "number") {
+        return [d.lat, d.lon];
+      }
+      return null;
+    }
+
+    function detectionId(d) {
+      if (d.id !== undefined && d.id !== null) return String(d.id);
+      return `${d.scene_id || "scene"}:${d.patch_id || "patch"}`;
+    }
+
+    function labelStudioTaskUrl(d) {
+      if (!d.flagged_for_review) return null;
+      const meta = d.metadata || d.metadata_json || {};
+      if (meta.label_studio_task_id) {
+        const base = API_BASE.replace(":8000", ":8080");
+        return `${base}/projects/${meta.label_studio_project_id || ""}/data?task=${meta.label_studio_task_id}`;
+      }
+      return null;
+    }
+
+    function buildPopupHtml(d) {
+      const ts = d.timestamp ? new Date(d.timestamp).toLocaleString() : "Unknown";
+      const link = labelStudioTaskUrl(d);
+      return `
+        <div class="popup-grid">
+          <div><b>Detection ID:</b> ${detectionId(d)}</div>
+          <div><b>Confidence:</b> ${(Number(d.confidence || 0) * 100).toFixed(1)}%</div>
+          <div><b>Timestamp:</b> ${ts}</div>
+          <div><b>AIS status:</b> ${statusFromDetection(d)}</div>
+          <div><b>Class:</b> ${d.class_label || "vessel"}</div>
+          ${link ? `<div><a href="${link}" target="_blank" rel="noopener">Open Label Studio task</a></div>` : "<div><i>No pending Label Studio task link</i></div>"}
+        </div>
+      `;
+    }
+
+    function createMarker(d, animate = false) {
+      const ll = getLatLon(d);
+      if (!ll) return null;
+      const id = detectionId(d);
+      const color = markerColor(d);
+
+      const marker = L.circleMarker(ll, {
+        radius: animate ? 2 : 6,
+        color,
+        fillColor: color,
+        fillOpacity: 0.82,
+        weight: 1.1
+      }).bindPopup(buildPopupHtml(d));
+
+      if (animate) {
+        let r = 2;
+        const timer = setInterval(() => {
+          r += 1;
+          marker.setRadius(Math.min(8, r));
+          if (r >= 8) clearInterval(timer);
+        }, 35);
+      }
+
+      markerById.set(id, marker);
+      marker.__detection = d;
+      return marker;
+    }
+
+    function applyClientDateRange(detections) {
+      const from = ui.startDate.value ? new Date(ui.startDate.value + "T00:00:00Z") : null;
+      const to = ui.endDate.value ? new Date(ui.endDate.value + "T23:59:59Z") : null;
+      if (!from && !to) return detections;
+      return detections.filter((d) => {
+        if (!d.timestamp) return false;
+        const ts = new Date(d.timestamp);
+        if (from && ts < from) return false;
+        if (to && ts > to) return false;
+        return true;
+      });
+    }
+
+    function redrawMarkers() {
+      markersLayer.clearLayers();
+      markerById.clear();
+
+      let data = allDetections.slice();
+      data = applyClientDateRange(data);
+
+      for (const d of data) {
+        const marker = createMarker(d, false);
+        if (marker) marker.addTo(markersLayer);
+      }
+    }
+
+    async function fetchDetections() {
+      const params = new URLSearchParams();
+      if (ui.darkOnly.checked) params.set("dark_only", "true");
+      params.set("min_confidence", ui.confidenceRange.value);
+
+      if (ui.startDate.value) {
+        params.set("since", new Date(ui.startDate.value + "T00:00:00Z").toISOString());
+      }
+
+      params.set("page", "1");
+      params.set("page_size", "1000");
+      const url = `${API_BASE}/api/detections?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Detections request failed (${res.status})`);
+      const payload = await res.json();
+      allDetections = Array.isArray(payload.items) ? payload.items : [];
+      redrawMarkers();
+    }
+
+    async function fetchStats() {
+      const res = await fetch(`${API_BASE}/api/stats`);
+      if (!res.ok) throw new Error(`Stats request failed (${res.status})`);
+      const s = await res.json();
+      ui.statToday.textContent = Number(s.total_detections_today || 0).toLocaleString();
+      ui.statDark.textContent = Number(s.dark_vessel_count || 0).toLocaleString();
+      ui.statIteration.textContent = String(s.active_learning_iteration || 0);
+      ui.statMap.textContent = `${(Number(s.current_model_map || 0) * 100).toFixed(1)}%`;
+    }
+
+    async function refreshAll() {
+      try {
+        await Promise.all([fetchDetections(), fetchStats()]);
+      } catch (err) {
+        showError(err.message || "Unable to refresh dashboard data.");
+      }
+    }
+
+    async function exportGeoJson() {
+      try {
+        const res = await fetch(`${API_BASE}/api/export`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: "geojson" })
+        });
+        if (!res.ok) throw new Error(`Export failed (${res.status})`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "dark_vessels.geojson";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showError(err.message || "GeoJSON export failed.");
+      }
+    }
+
+    function isFilteredOut(d) {
+      if (ui.darkOnly.checked && !d.is_dark) return true;
+      if (Number(d.confidence || 0) < Number(ui.confidenceRange.value)) return true;
+      const ranged = applyClientDateRange([d]);
+      if (ranged.length === 0) return true;
+      return false;
+    }
+
+    function addLiveDetection(d) {
+      if (!d) return;
+      if (isFilteredOut(d)) return;
+
+      allDetections.unshift(d);
+      const marker = createMarker(d, true);
+      if (marker) marker.addTo(markersLayer);
+    }
+
+    function connectWebSocket() {
+      if (ws) {
+        try { ws.close(); } catch (_) {}
+      }
+      ws = new WebSocket(`${WS_BASE}/ws/live`);
+      ui.statLive.textContent = "Connecting...";
+
+      ws.onopen = () => {
+        wsRetryMs = 3000;
+        ui.statLive.textContent = "Connected";
+      };
+
+      ws.onmessage = (ev) => {
+        try {
+          const d = JSON.parse(ev.data);
+          addLiveDetection(d);
+        } catch (_) {
+          /* ignore malformed messages */
+        }
+      };
+
+      ws.onclose = () => {
+        ui.statLive.textContent = "Reconnecting...";
+        setTimeout(connectWebSocket, wsRetryMs);
+        wsRetryMs = Math.min(wsRetryMs * 1.5, 15000);
+      };
+
+      ws.onerror = () => {
+        ui.statLive.textContent = "Connection issue";
+      };
+    }
+
+    ui.confidenceRange.addEventListener("input", () => {
+      ui.confidenceValue.textContent = Number(ui.confidenceRange.value).toFixed(2);
+    });
+    ui.applyFilters.addEventListener("click", refreshAll);
+    ui.exportGeoJson.addEventListener("click", exportGeoJson);
+
+    refreshAll();
+    setInterval(refreshAll, POLL_MS);
+    connectWebSocket();
+  </script>
+</body>
+</html>

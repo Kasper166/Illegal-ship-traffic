@@ -1,0 +1,155 @@
+name: darkwater
+
+services:
+  dashboard-backend:
+    build:
+      context: .
+      dockerfile: dashboard/backend/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./shared:/app/shared
+      - ./dashboard/backend:/app/dashboard_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      label-studio:
+        condition: service_started
+    networks:
+      - darkwater-net
+
+  dashboard-frontend:
+    build:
+      context: .
+      dockerfile: dashboard/frontend/Dockerfile
+    ports:
+      - "8088:80"
+    depends_on:
+      - dashboard-backend
+    networks:
+      - darkwater-net
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: ingestion/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ./shared:/app/shared
+      - ./ingestion:/app/ingestion
+      - darkwater-data:/app/data
+    command: ["python", "-m", "ingestion.main"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - darkwater-net
+
+  detection:
+    build:
+      context: .
+      dockerfile: detection/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ./shared:/app/shared
+      - ./detection:/app/detection
+      - darkwater-data:/app/data
+      - darkwater-models:/app/models
+    command: ["python", "-m", "detection.train"]
+    networks:
+      - darkwater-net
+
+  active-learning:
+    build:
+      context: .
+      dockerfile: active_learning/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ./shared:/app/shared
+      - ./active_learning:/app/active_learning
+      - darkwater-data:/app/data
+    command: ["python", "-m", "active_learning.worker"]
+    depends_on:
+      - label-studio
+      - postgres
+    networks:
+      - darkwater-net
+
+  ais:
+    build:
+      context: .
+      dockerfile: ais/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - ./shared:/app/shared
+      - ./ais:/app/ais
+      - darkwater-data:/app/data
+    command: ["python", "-m", "ais.main"]
+    depends_on:
+      - qdrant
+      - postgres
+    networks:
+      - darkwater-net
+
+  qdrant:
+    image: qdrant/qdrant:v1.11.3
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - darkwater-net
+
+  label-studio:
+    image: heartexlabs/label-studio:1.14.0
+    env_file:
+      - .env
+    environment:
+      - LABEL_STUDIO_USERNAME=${LABEL_STUDIO_USERNAME}
+      - LABEL_STUDIO_PASSWORD=${LABEL_STUDIO_PASSWORD}
+    ports:
+      - "8080:8080"
+    volumes:
+      - label-studio-data:/label-studio/data
+    networks:
+      - darkwater-net
+
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - darkwater-net
+
+volumes:
+  darkwater-data:
+  darkwater-models:
+  qdrant-data:
+  label-studio-data:
+  postgres-data:
+
+networks:
+  darkwater-net:
+    driver: bridge

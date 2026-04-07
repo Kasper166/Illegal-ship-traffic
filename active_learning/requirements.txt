@@ -1,0 +1,6 @@
+requests
+pydantic
+label-studio-sdk
+typer
+wandb
+pyyaml

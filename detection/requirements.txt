@@ -1,0 +1,6 @@
+ultralytics
+pydantic
+wandb
+pandas
+pillow
+pyyaml

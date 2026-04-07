@@ -1,0 +1,10 @@
+sentinelsat
+typer
+requests
+pydantic
+responses
+pytest
+numpy
+rasterio
+opencv-python-headless
+scipy
