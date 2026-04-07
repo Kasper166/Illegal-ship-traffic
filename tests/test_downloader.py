@@ -66,6 +66,7 @@ def test_run_download_skips_manifest_and_warns_on_cadence(tmp_path: Path, monkey
             manifest_path=manifest_path,
             expected_revisit_days=6,
             api=api,
+            min_free_gb=1,
         )
 
     assert sorted(downloaded_first) == ["S1A_SCENE_1", "S1A_SCENE_2"]
@@ -81,6 +82,7 @@ def test_run_download_skips_manifest_and_warns_on_cadence(tmp_path: Path, monkey
         manifest_path=manifest_path,
         expected_revisit_days=6,
         api=api,
+        min_free_gb=1,
     )
     assert downloaded_second == []
     assert len(api.download_calls) == 2
