@@ -29,11 +29,10 @@ from shared.schemas import (
 app = FastAPI(title="DARKWATER API", version="0.1.0")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is required")
-
-engine = create_async_engine(DATABASE_URL, future=True)
-SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+engine = create_async_engine(DATABASE_URL, future=True) if DATABASE_URL else None
+SessionLocal = (
+    async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False) if engine is not None else None
+)
 ITERATIONS_PATH = Path(
     os.getenv(
         "ITERATIONS_JSON_PATH",
@@ -107,11 +106,15 @@ def _today_bounds_utc() -> tuple[datetime, datetime]:
 
 
 async def get_session() -> AsyncSession:
+    if SessionLocal is None:
+        raise RuntimeError("DATABASE_URL is required")
     async with SessionLocal() as session:
         yield session
 
 
 async def detection_poller() -> None:
+    if SessionLocal is None:
+        return
     last_seen_id = 0
     while True:
         try:
@@ -135,7 +138,8 @@ async def detection_poller() -> None:
 @app.on_event("startup")
 async def on_startup() -> None:
     global poller_task
-    poller_task = asyncio.create_task(detection_poller())
+    if SessionLocal is not None:
+        poller_task = asyncio.create_task(detection_poller())
 
 
 @app.on_event("shutdown")
@@ -144,7 +148,8 @@ async def on_shutdown() -> None:
         poller_task.cancel()
         with suppress(asyncio.CancelledError):
             await poller_task
-    await engine.dispose()
+    if engine is not None:
+        await engine.dispose()
 
 
 @app.get("/health", response_model=HealthResponse)
