@@ -6,7 +6,9 @@ import io
 import json
 import os
 from contextlib import suppress
-from datetime import UTC, datetime, time
+from datetime import datetime, time, timezone
+
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
