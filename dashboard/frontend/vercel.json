@@ -1,0 +1,7 @@
+{
+  "buildCommand": "echo 'Static HTML — no build step'",
+  "outputDirectory": ".",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

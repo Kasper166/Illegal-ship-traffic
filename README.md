@@ -3,6 +3,20 @@
 DARKWATER is a modular, containerized platform for detecting and analyzing potentially illegal maritime activity from SAR imagery.  
 It combines machine-learning detection, AIS correlation, active learning, and a web dashboard in one Python monorepo.
 
+## Live Demo
+
+> **Try it now →** [darkwater.vercel.app](https://darkwater.vercel.app) *(read-only demo with sample data)*
+
+The live demo showcases:
+- Real-time vessel detection map (Gulf of Guinea)
+- Filtering by confidence score, dark vessel status, and date range
+- Data export (CSV / GeoJSON)
+- Live detection feed via WebSocket
+- Model performance statistics (mAP progression)
+
+> Ingestion and model training are disabled in demo mode to prevent abuse.
+> See [DEPLOYMENT.md](DEPLOYMENT.md) to deploy your own instance.
+
 ## Website
 
 - Use the project website/repository here: [https://github.com/Kasper166/Illegal-ship-traffic](https://github.com/Kasper166/Illegal-ship-traffic)
@@ -34,9 +48,20 @@ Infrastructure services:
 - `qdrant` for vector similarity search
 - `label-studio` for annotation workflows
 
-## Quick Start
+## Getting Started
 
-### 1) Configure environment
+### Run Locally
+
+```bash
+cp .env.example .env   # fill in your credentials
+make up                # starts all services via Docker Compose
+```
+
+Open [http://localhost:5173](http://localhost:5173) for the dashboard.
+
+### Quick Start (Detailed)
+
+#### 1) Configure environment
 
 ```bash
 cp .env.example .env
@@ -44,14 +69,14 @@ cp .env.example .env
 
 Fill in required secrets and credentials in `.env`.
 
-### 2) Build and run
+#### 2) Build and run
 
 ```bash
 make build
 make up
 ```
 
-### 3) Access services
+#### 3) Access services
 
 - Frontend: `http://localhost:8088`
 - Backend API: `http://localhost:8000`

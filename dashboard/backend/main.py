@@ -13,11 +13,12 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from shared.config import settings
 from shared.schemas import (
     DetectionListResponse,
     DetectionRecord,
@@ -31,7 +32,12 @@ from shared.schemas import (
 
 app = FastAPI(title="DARKWATER API", version="0.1.0")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+def _require_write_access() -> None:
+    if settings.demo_mode:
+        raise HTTPException(status_code=403, detail="Write operations are disabled in demo mode.")
+
+DATABASE_URL = settings.database_url
 engine = create_async_engine(DATABASE_URL, future=True) if DATABASE_URL else None
 SessionLocal = (
     async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False) if engine is not None else None
@@ -158,6 +164,15 @@ async def on_shutdown() -> None:
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.get("/api/demo-info")
+def demo_info() -> dict:
+    return {
+        "demo_mode": settings.demo_mode,
+        "sample_data": settings.demo_mode,
+        "since": "2026-03-09",
+    }
 
 
 @app.get("/api/detections", response_model=DetectionListResponse)
@@ -315,6 +330,12 @@ async def export_dark_vessels(
         )
     else:
         raise ValueError(f"Unsupported export format: {body.format!r}")
+
+
+@app.post("/api/ingest")
+async def trigger_ingest() -> dict:
+    _require_write_access()
+    return {"status": "ingestion triggered"}
 
 
 @app.websocket("/ws/live")

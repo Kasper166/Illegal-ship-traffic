@@ -1,0 +1,15 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "_readme": "Backend service config. Add Postgres and Qdrant as separate Railway services via the dashboard. See DEPLOYMENT.md for full setup instructions.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "dashboard/backend/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "sh -c 'alembic upgrade head && uvicorn dashboard.backend.main:app --host 0.0.0.0 --port 8000'",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}

@@ -275,9 +275,11 @@
     crossorigin=""
   ></script>
   <script>
-    const API_BASE = window.location.protocol.startsWith("http")
-      ? window.location.origin.replace(/\/$/, "")
-      : "http://localhost:8000";
+    const API_BASE = (typeof __API_BASE__ !== 'undefined' && __API_BASE__)
+      ? __API_BASE__
+      : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? 'http://localhost:8000'
+        : '';
     const WS_BASE = API_BASE.replace(/^http/, "ws");
     const POLL_MS = 60000;
 
@@ -285,7 +287,7 @@
       zoomControl: true,
       minZoom: 3,
       worldCopyJump: true
-    }).setView([2.5, 3.5], 6);
+    }).setView([2.5, 3.5], 6); // Gulf of Guinea — DARKWATER Live Demo
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; CARTO',
