@@ -12,6 +12,7 @@ from ultralytics import YOLO
 
 from shared.logging import get_logger
 from shared.schemas import DetectionRecord as Detection
+from shared.storage import download_file, list_keys
 
 logger = get_logger("detection.inference")
 
@@ -48,12 +49,30 @@ def _pixel_center_to_latlon(
     return (lat, lon)
 
 
+def _sync_patches_from_r2(scene_id: str, patches_dir: Path) -> None:
+    """Download any patches for scene_id not already present locally."""
+    prefix = f"patches/{scene_id}/"
+    try:
+        keys = list_keys(prefix)
+    except Exception as exc:
+        logger.warning("Could not list R2 keys for prefix %s: %s", prefix, exc)
+        return
+    for key in keys:
+        local = patches_dir / scene_id / Path(key).name
+        if not local.exists():
+            download_file(key, local)
+
+
 def run_inference(
     patches_dir: Path,
     model_path: Path,
     output_jsonl: Path,
     batch_size: int = 16,
+    scene_id: str | None = None,
 ) -> Path:
+    if scene_id and os.getenv("R2_ENDPOINT_URL"):
+        _sync_patches_from_r2(scene_id, patches_dir)
+
     threshold = float(os.getenv("ACTIVE_LEARNING_THRESHOLD", "0.45"))
     device = os.getenv("INFERENCE_DEVICE", "cpu")
 

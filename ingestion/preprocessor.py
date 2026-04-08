@@ -16,6 +16,7 @@ from scipy.ndimage import gaussian_filter
 import typer
 
 from shared.logging import get_logger
+from shared.storage import upload_file
 
 logger = get_logger("ingestion.preprocessor")
 app = typer.Typer(help="Windowed Sentinel-1 GRD preprocessor.")
@@ -233,6 +234,10 @@ def preprocess_safe_scene(
                 )
                 metadata.append(meta)
                 patch_paths.append(str(patch_png))
+
+                upload_file(patch_png, f"patches/{scene_id}/{patch_png.name}")
+                upload_file(patch_geojson, f"patches/{scene_id}/{patch_geojson.name}")
+
                 patch_idx += 1
 
     keep_ratio = (len(patch_paths) / total_windows) if total_windows else 0.0

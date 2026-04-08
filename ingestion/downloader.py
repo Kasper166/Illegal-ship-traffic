@@ -15,6 +15,7 @@ import typer
 from sentinelsat import geojson_to_wkt
 
 from shared.logging import get_logger
+from shared.storage import object_exists, upload_file
 
 logger = get_logger("ingestion.downloader")
 app = typer.Typer(help="Sentinel-1 ingestion CLI for DARKWATER.")
@@ -356,6 +357,11 @@ def run_download(
         result = local_api.download(rec.product_id, directory_path=str(data_dir))
         file_size = _discover_file_size_bytes(result)
         file_path = str(result.get("path", ""))
+
+        r2_key = f"scenes/{rec.scene_id}/{Path(file_path).name}"
+        if file_path and Path(file_path).exists() and not object_exists(r2_key):
+            upload_file(Path(file_path), r2_key)
+
         _insert_download(
             conn,
             scene_id=rec.scene_id,

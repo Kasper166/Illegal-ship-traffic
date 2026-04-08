@@ -4,3 +4,4 @@ wandb
 pandas
 pillow
 pyyaml
+boto3
