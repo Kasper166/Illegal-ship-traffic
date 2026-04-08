@@ -9,6 +9,7 @@ from contextlib import suppress
 from datetime import datetime, time, timezone
 
 UTC = timezone.utc
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
@@ -107,7 +108,7 @@ def _today_bounds_utc() -> tuple[datetime, datetime]:
     return start, end
 
 
-async def get_session() -> AsyncSession:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     if SessionLocal is None:
         raise RuntimeError("DATABASE_URL is required")
     async with SessionLocal() as session:
@@ -208,7 +209,9 @@ async def get_stats(session: AsyncSession = Depends(get_session)) -> StatsRespon
         DetectionRecordORM.timestamp <= day_end,
     )
     dark_count_q = select(func.count()).select_from(DetectionRecordORM).where(
-        DetectionRecordORM.is_dark.is_(True)
+        DetectionRecordORM.is_dark.is_(True),
+        DetectionRecordORM.timestamp >= day_start,
+        DetectionRecordORM.timestamp <= day_end,
     )
     latest_map_q = (
         select(ModelMetricsORM.map50)
@@ -280,36 +283,38 @@ async def export_dark_vessels(
             media_type="text/csv",
             headers={"Content-Disposition": 'attachment; filename="dark_vessels.csv"'},
         )
-
-    features = []
-    for det in records:
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [det.lat_lon_center[1], det.lat_lon_center[0]],
-                },
-                "properties": {
-                    "id": det.id,
-                    "patch_id": det.patch_id,
-                    "tile_id": det.tile_id,
-                    "confidence": det.confidence,
-                    "class_label": det.class_label,
-                    "timestamp": det.timestamp.isoformat(),
-                    "scene_id": det.scene_id,
-                    "flagged_for_review": det.flagged_for_review,
-                    "is_dark": det.is_dark,
-                },
-            }
+    elif body.format == "geojson":
+        features = []
+        for det in records:
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [det.lat_lon_center[1], det.lat_lon_center[0]],
+                    },
+                    "properties": {
+                        "id": det.id,
+                        "patch_id": det.patch_id,
+                        "tile_id": det.tile_id,
+                        "confidence": det.confidence,
+                        "class_label": det.class_label,
+                        "timestamp": det.timestamp.isoformat(),
+                        "scene_id": det.scene_id,
+                        "flagged_for_review": det.flagged_for_review,
+                        "is_dark": det.is_dark,
+                    },
+                }
+            )
+        geojson_payload = {"type": "FeatureCollection", "features": features}
+        encoded = json.dumps(geojson_payload).encode("utf-8")
+        return StreamingResponse(
+            io.BytesIO(encoded),
+            media_type="application/geo+json",
+            headers={"Content-Disposition": 'attachment; filename="dark_vessels.geojson"'},
         )
-    geojson_payload = {"type": "FeatureCollection", "features": features}
-    encoded = json.dumps(geojson_payload).encode("utf-8")
-    return StreamingResponse(
-        io.BytesIO(encoded),
-        media_type="application/geo+json",
-        headers={"Content-Disposition": 'attachment; filename="dark_vessels.geojson"'},
-    )
+    else:
+        raise ValueError(f"Unsupported export format: {body.format!r}")
 
 
 @app.websocket("/ws/live")

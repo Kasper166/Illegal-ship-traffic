@@ -307,8 +307,13 @@ def pull_completed_labels(
 
         task_id = task.get("id")
         detection_id = None
-        if scene_id != "unknown_scene" and patch_id != "unknown_patch":
-            detection_id = f"{scene_id}:{patch_id}:0"
+        if task_id:
+            row = conn.execute(
+                "SELECT detection_id FROM labeling_queue WHERE task_id = ? LIMIT 1",
+                (int(task_id),),
+            ).fetchone()
+            if row:
+                detection_id = row[0]
         if detection_id:
             _insert_queue_row(
                 conn,

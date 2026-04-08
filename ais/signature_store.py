@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
+import uuid
 
 import numpy as np
 import timm
@@ -170,6 +170,9 @@ class VesselSignatureStore:
         Returns:
             bool: True when inserted, False when duplicate was skipped.
         """
+        # Fast-path optimisation: skip embedding work if already indexed.
+        # Correctness does not depend on this check — the deterministic point ID
+        # below ensures the upsert is idempotent even under concurrent workers.
         if self._detection_exists(detection_id):
             return False
 
@@ -184,8 +187,10 @@ class VesselSignatureStore:
             "is_dark_vessel": bool(is_dark_vessel),
             "vessel_class": vessel_class,
         }
+        # Derive point ID deterministically from detection_id so that concurrent
+        # upserts for the same detection converge to a single Qdrant point.
         point = qmodels.PointStruct(
-            id=str(uuid4()),
+            id=str(uuid.uuid5(uuid.NAMESPACE_DNS, detection_id)),
             vector=vec.tolist(),
             payload=payload,
         )

@@ -64,9 +64,11 @@ class CDSEODataAPI:
         self.token_url = token_url.rstrip("/")
         self.odata_url = odata_url.rstrip("/")
         self._access_token: str | None = None
+        self._token_expires_at: datetime | None = None
 
     def _get_token(self) -> str:
-        if self._access_token:
+        now = datetime.now(timezone.utc)
+        if self._access_token and self._token_expires_at and now < self._token_expires_at:
             return self._access_token
         resp = requests.post(
             self.token_url,
@@ -82,8 +84,15 @@ class CDSEODataAPI:
         token = payload.get("access_token")
         if not token:
             raise RuntimeError("CDSE token response did not include access_token.")
+        expires_in = int(payload.get("expires_in", 300))
+        # Subtract 30 s as a safety buffer against clock skew and latency.
+        self._token_expires_at = now + timedelta(seconds=max(0, expires_in - 30))
         self._access_token = str(token)
         return self._access_token
+
+    def _invalidate_token(self) -> None:
+        self._access_token = None
+        self._token_expires_at = None
 
     def query(
         self,
@@ -109,6 +118,14 @@ class CDSEODataAPI:
             headers={"Authorization": f"Bearer {self._get_token()}"},
             timeout=60,
         )
+        if resp.status_code == 401:
+            self._invalidate_token()
+            resp = requests.get(
+                f"{self.odata_url}/Products",
+                params=params,
+                headers={"Authorization": f"Bearer {self._get_token()}"},
+                timeout=60,
+            )
         resp.raise_for_status()
         values = resp.json().get("value", [])
         out: dict[str, dict[str, Any]] = {}
@@ -124,18 +141,23 @@ class CDSEODataAPI:
     def download(self, product_id: str, directory_path: str) -> dict[str, Any]:
         url = f"{self.odata_url}/Products({product_id})/$value"
         output = Path(directory_path) / f"{product_id}.zip"
-        with requests.get(
-            url,
-            headers={"Authorization": f"Bearer {self._get_token()}"},
-            stream=True,
-            timeout=180,
-        ) as resp:
-            resp.raise_for_status()
-            output.parent.mkdir(parents=True, exist_ok=True)
-            with output.open("wb") as f:
-                for chunk in resp.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        f.write(chunk)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        for attempt in range(2):
+            with requests.get(
+                url,
+                headers={"Authorization": f"Bearer {self._get_token()}"},
+                stream=True,
+                timeout=180,
+            ) as resp:
+                if resp.status_code == 401 and attempt == 0:
+                    self._invalidate_token()
+                    continue
+                resp.raise_for_status()
+                with output.open("wb") as f:
+                    for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+            break
         return {"path": str(output)}
 
 

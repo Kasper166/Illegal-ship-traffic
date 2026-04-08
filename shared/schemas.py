@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -61,6 +61,32 @@ class DetectionRecord(BaseModel):
     scene_id: str
     flagged_for_review: bool = False
     is_dark: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_lat_lon(cls, data: Any) -> Any:
+        """Map separate lat/lon ORM columns into the lat_lon_center tuple field."""
+        if isinstance(data, dict):
+            if "lat_lon_center" not in data and "lat" in data and "lon" in data:
+                data = {**data, "lat_lon_center": (data["lat"], data["lon"])}
+            return data
+        # ORM / attribute-bearing object without lat_lon_center attribute
+        if hasattr(data, "lat") and hasattr(data, "lon") and not hasattr(data, "lat_lon_center"):
+            return {
+                "id": getattr(data, "id", None),
+                "patch_id": data.patch_id,
+                "tile_id": data.tile_id,
+                "bbox_xyxy": list(data.bbox_xyxy),
+                "pixel_coords": list(data.pixel_coords),
+                "confidence": data.confidence,
+                "class_label": data.class_label,
+                "lat_lon_center": (data.lat, data.lon),
+                "timestamp": data.timestamp,
+                "scene_id": data.scene_id,
+                "flagged_for_review": data.flagged_for_review,
+                "is_dark": data.is_dark,
+            }
+        return data
 
 
 class DetectionListResponse(BaseModel):
