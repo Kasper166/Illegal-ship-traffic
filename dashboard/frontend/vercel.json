@@ -1,7 +1,23 @@
 {
   "buildCommand": "echo 'Static HTML — no build step'",
   "outputDirectory": ".",
+
+  "env": {
+    "RAILWAY_BACKEND_URL": "https://postgres-production-7ee9.up.railway.app"
+  },
+
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://postgres-production-7ee9.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/ws/:path*",
+      "destination": "https://postgres-production-7ee9.up.railway.app/ws/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

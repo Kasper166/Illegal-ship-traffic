@@ -34,6 +34,27 @@ Add GitHub secrets for auto-deploy on push to `main`:
 - `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (from Vercel dashboard)
 - `RAILWAY_API_TOKEN` (from Railway → Account Settings)
 
+## Setting Up Cloudflare R2 (SAR Image Storage)
+
+1. Create a free Cloudflare account at cloudflare.com
+2. Navigate to R2 Object Storage → Create bucket
+   - Bucket name suggestion: `darkwater-sar`
+   - Location: auto (or nearest to Railway region)
+3. Generate R2 API credentials:
+   - Go to R2 → Manage R2 API Tokens → Create API Token
+   - Permissions: Object Read & Write
+   - Copy Access Key ID and Secret Access Key
+4. Get your R2 endpoint URL:
+   - Format: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
+   - Find your Account ID in the Cloudflare dashboard URL or Overview page
+5. (Optional) Enable public access for SAR image thumbnails:
+   - R2 bucket → Settings → Public Access → Allow
+   - Note the public URL (e.g., `https://pub-<hash>.r2.dev`)
+   - When set, `shared/storage.py` uses this URL directly instead of generating presigned URLs
+6. Set these env vars in Railway (backend service → Variables):
+   - `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`
+7. Free tier limits: 10 GB storage, 1M Class A ops, 10M Class B ops/month — more than enough for demo SAR data.
+
 ## Verification Checklist
 - [ ] Frontend loads at Vercel URL, map shows vessel markers
 - [ ] Stats bar shows detection counts
